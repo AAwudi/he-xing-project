@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>核心攻关项目 - Demo演示</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <!-- 侧边目录 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1 class="system-name">核心攻关项目</h1>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-group">
+          <div class="nav-group-title" data-group="compliance">合规管理</div>
+          <div class="nav-group-items">
+            <a class="nav-item active" href="#" data-tab="compliance">合规库管理</a>
+            <a class="nav-item" href="#" data-tab="items">检查项管理</a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-title" data-group="inspection">合规检查</div>
+          <div class="nav-group-items">
+            <a class="nav-item" href="#" data-tab="tasks">合规检查</a>
+          </div>
+        </div>
+      </nav>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main">
+      <!-- 1. 合规库管理 - 网格展示 / 文件内容查看 -->
+      <section id="compliance" class="panel active">
+        <!-- 网格列表视图 -->
+        <div id="complianceGridView">
+          <div class="panel-header">
+            <h2>合规库管理</h2>
+            <button class="btn btn-primary" id="uploadFile">上传文件</button>
+          </div>
+          <div class="grid-container" id="complianceGrid">
+            <!-- 网格卡片由JS动态生成 -->
+          </div>
+        </div>
+        <!-- 文件内容查看视图（按图示样式） -->
+        <div id="fileContentView" class="hidden">
+          <div class="file-view-header">
+            <h2 class="file-view-title">运营手册详情</h2>
+            <button class="btn btn-primary" id="backToComplianceGrid">返回</button>
+          </div>
+          <div class="file-view-info-bar">
+            <div class="file-view-info">
+              <div class="file-view-name" id="fileViewName"></div>
+              <div class="file-view-meta">
+                <span class="file-view-meta-item"><span class="icon-text">👤</span>提交人: <span id="fileViewUploader"></span></span>
+                <span class="file-view-meta-item"><span class="icon-text">🕐</span>上传时间: <span id="fileViewUploadTime"></span></span>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="fileViewDownload">⬇ 下载</button>
+          </div>
+          <div class="file-view-preview">
+            <div class="file-view-doc" id="fileViewDoc"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. 检查项管理 -->
+      <section id="items" class="panel">
+        <div class="panel-header">
+          <h2>检查项管理</h2>
+        </div>
+        <div class="items-layout">
+          <div class="items-file-list">
+            <h4 class="file-list-title">合规文件</h4>
+            <ul class="file-list" id="itemsFileList"></ul>
+          </div>
+          <div class="items-content">
+        <div class="search-bar">
+          <div class="search-field">
+            <label>检查类别</label>
+            <select id="searchCategory" class="search-input">
+              <option value="">请选择</option>
+            </select>
+          </div>
+          <div class="search-field">
+            <label>检查事项</label>
+            <select id="searchItem" class="search-input">
+              <option value="">请选择</option>
+            </select>
+          </div>
+          <div class="search-field">
+            <label>检查要求</label>
+            <input type="text" id="searchRequirement" class="search-input" placeholder="请输入">
+          </div>
+          <div class="search-field">
+            <label>检查方式</label>
+            <select id="searchMethod" class="search-input">
+              <option value="">请选择</option>
+            </select>
+          </div>
+          <button type="button" class="btn btn-primary" id="itemsSearch">🔍 搜索</button>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>检查类别</th>
+                <th>检查事项</th>
+                <th>检查要求</th>
+                <th>检查方式</th>
+                <th>所属合规文件</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTableBody"></tbody>
+          </table>
+        </div>
+        <div class="pagination" id="itemsPagination"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. 合规检查 -->
+      <section id="tasks" class="panel">
+        <!-- 任务列表视图 -->
+        <div id="taskListView">
+          <div class="panel-header">
+            <h2>合规检查</h2>
+            <button class="btn btn-primary" id="newTask">新建检查任务</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>任务名称</th>
+                  <th>选择资产</th>
+                  <th>开始时间</th>
+                  <th>结束时间</th>
+                  <th>检查项</th>
+                  <th>检查进度</th>
+                  <th>创建人</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="tasksTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <!-- 检查执行视图 -->
+        <div id="inspectView" class="hidden">
+          <div class="panel-header inspect-header">
+            <div><h2>合规检查</h2><button class="btn btn-secondary" id="backToTaskList">← 返回任务列表</button></div>
+            <button class="btn btn-primary" id="finishInspect">结束检查</button>
+          </div>
+          <div class="inspect-task-detail" id="inspectTaskDetail"></div>
+          <div class="inspect-search-bar">
+            <div class="search-field">
+              <label>检查要点</label>
+              <input type="text" id="inspectKeyPointSearch" class="search-input" placeholder="请输入">
+            </div>
+            <div class="search-field">
+              <label>检查结果</label>
+              <select id="inspectResultFilter" class="search-input">
+                <option value="">请选择</option>
+                <option value="pass">通过</option>
+                <option value="fail">不通过</option>
+              </select>
+            </div>
+            <button type="button" class="btn btn-primary" id="inspectSearchBtn">🔍 搜索</button>
+          </div>
+          <input type="file" id="inspectFileInput" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg,.gif,.webp" style="display:none">
+          <div class="inspect-layout">
+            <div class="inspect-sidebar">
+              <h4 class="inspect-sidebar-title">检查项</h4>
+              <input type="text" id="inspectItemSearch" class="inspect-sidebar-search" placeholder="请输入">
+              <ul class="inspect-item-list" id="inspectItemList"></ul>
+            </div>
+            <div class="inspect-main">
+              <table class="data-table inspect-table">
+                <thead>
+                  <tr>
+                    <th>检查要点</th>
+                    <th>问题</th>
+                    <th>备注</th>
+                    <th>附件</th>
+                  </tr>
+                </thead>
+                <tbody id="inspectTableBody"></tbody>
+              </table>
+              <div class="pagination" id="inspectPagination"></div>
+            </div>
+          </div>
+        </div>
+        <!-- 检查详情视图（只读） -->
+        <div id="detailView" class="hidden">
+          <div class="panel-header inspect-header">
+            <div><h2>检查详情</h2><button class="btn btn-secondary" id="backToDetailTaskList">← 返回任务列表</button></div>
+            <button class="btn btn-primary" id="detailDownloadReport">下载检查报告</button>
+          </div>
+          <div id="detailTaskInfo"></div>
+          <div class="inspect-layout detail-readonly">
+            <div class="inspect-sidebar">
+              <h4 class="inspect-sidebar-title">检查项</h4>
+              <ul class="inspect-item-list" id="detailItemList"></ul>
+            </div>
+            <div class="inspect-main">
+              <table class="data-table inspect-table">
+                <thead>
+                  <tr>
+                    <th>检查要点</th>
+                    <th>问题</th>
+                    <th>备注</th>
+                    <th>附件</th>
+                  </tr>
+                </thead>
+                <tbody id="detailTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- 模态框：上传合规文件 -->
+  <div class="modal" id="uploadFileModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>上传合规文件</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="uploadFileForm">
+          <div class="form-group">
+            <label>选择文件 <span class="required">*</span></label>
+            <input type="file" name="file" accept=".pdf,.doc,.docx,.xls,.xlsx" required>
+          </div>
+          <div class="form-group">
+            <label>合规类型</label>
+            <select name="complianceType">
+              <option value="">请选择</option>
+              <option value="等级保护">等级保护</option>
+              <option value="关键信息基础设施">关键信息基础设施</option>
+              <option value="行业合规">行业合规</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>发布单位</label>
+            <input type="text" name="publishUnit" placeholder="如：公安部、网信办等">
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <textarea name="remark" rows="3" placeholder="可选"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary modal-cancel">取消</button>
+            <button type="submit" class="btn btn-primary">上传</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：查看合规文件 -->
+  <div class="modal" id="viewFileModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>查看合规文件</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="viewFileContent"></div>
+    </div>
+  </div>
+
+  <!-- 模态框：新建检查任务 -->
+  <div class="modal" id="newTaskModal">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h3>新建检查任务</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="newTaskForm">
+          <div class="form-group">
+            <label>任务名称 <span class="required">*</span>（50字符）</label>
+            <input type="text" name="taskName" maxlength="50" placeholder="请输入任务名称" required>
+          </div>
+          <div class="form-group">
+            <label>选择资产</label>
+            <select name="asset">
+              <option value="">请选择系统</option>
+              <option value="OA系统">OA系统</option>
+              <option value="财务系统">财务系统</option>
+              <option value="HR系统">HR系统</option>
+              <option value="安全管控平台">安全管控平台</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>检查范围 <span class="required">*</span></label>
+            <p class="hint"></p>
+            <div class="task-scope-switch">
+              <label class="scope-radio"><input type="radio" name="scopeType" value="file" checked> 选择合规文件</label>
+              <label class="scope-radio"><input type="radio" name="scopeType" value="item"> 选择检查项</label>
+            </div>
+            <div class="task-select-block" id="scopeFileBlock">
+              <div class="check-item-select" id="complianceFileOptions"></div>
+            </div>
+            <div class="task-select-block hidden" id="scopeItemBlock">
+              <input type="text" id="taskItemSearch" class="task-item-search" placeholder="搜索检查项、检查事项、合规文件...">
+              <div class="check-item-select" id="checkItemOptions"></div>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <textarea name="remark" rows="3" placeholder="可选"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary modal-cancel">取消</button>
+            <button type="submit" class="btn btn-primary">创建任务</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：执行检查 -->
+  <div class="modal" id="executeModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>执行合规检查</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="executeForm">
+          <input type="hidden" name="taskId">
+          <div class="form-group">
+            <label>检查结果</label>
+            <select name="result">
+              <option value="通过">通过</option>
+              <option value="不通过">不通过</option>
+              <option value="部分通过">部分通过</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>备注</label>
+            <textarea name="remark" rows="3" placeholder="检查备注"></textarea>
+          </div>
+          <div class="form-group">
+            <label>附件上传</label>
+            <input type="file" name="attachment" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg">
+            <p class="hint">支持多文件上传</p>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary modal-cancel">取消</button>
+            <button type="submit" class="btn btn-primary">结束检查</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：合规文件详情（检查要点、需要被检查单位配合事项） -->
+  <div class="modal" id="itemDetailModal">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h3>合规文件详情</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="itemDetailContent"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
