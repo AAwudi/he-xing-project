@@ -25,6 +25,7 @@
           <div class="nav-group-title" data-group="inspection">合规检查</div>
           <div class="nav-group-items">
             <a class="nav-item" href="#" data-tab="tasks">合规检查</a>
+            <a class="nav-item" href="#" data-tab="opsMetrics">运营指标</a>
           </div>
         </div>
       </nav>
@@ -70,6 +71,10 @@
       <section id="items" class="panel">
         <div class="panel-header">
           <h2>检查项管理</h2>
+          <div class="panel-actions">
+            <button class="btn btn-secondary" id="manualImportItem">新建</button>
+            <button class="btn btn-primary" id="openImportModal">导入</button>
+          </div>
         </div>
         <div class="items-layout">
           <div class="items-file-list">
@@ -111,6 +116,7 @@
                 <th>检查要求</th>
                 <th>检查方式</th>
                 <th>所属合规文件</th>
+                <th>是否自动检查</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -128,16 +134,27 @@
         <div id="taskListView">
           <div class="panel-header">
             <h2>合规检查</h2>
-            <button class="btn btn-primary" id="newTask">新建检查任务</button>
+            <div class="panel-actions">
+              <span class="unit-switcher">
+                <label>当前视角：</label>
+                <select id="currentUnitSelect">
+                  <option value="u0">省公司</option>
+                  <option value="u1">A市分公司</option>
+                  <option value="u2">B市分公司</option>
+                  <option value="u3">C市分公司</option>
+                </select>
+              </span>
+              <button class="btn btn-primary" id="newTask">新建检查任务</button>
+            </div>
           </div>
           <div class="table-wrapper">
             <table class="data-table">
               <thead>
                 <tr>
                   <th>任务名称</th>
-                  <th>选择资产</th>
+                  <th>下发单位</th>
                   <th>开始时间</th>
-                  <th>结束时间</th>
+                  <th>截止时间</th>
                   <th>检查项</th>
                   <th>检查进度</th>
                   <th>创建人</th>
@@ -153,7 +170,10 @@
         <div id="inspectView" class="hidden">
           <div class="panel-header inspect-header">
             <div><h2>合规检查</h2><button class="btn btn-secondary" id="backToTaskList">← 返回任务列表</button></div>
-            <button class="btn btn-primary" id="finishInspect">结束检查</button>
+            <div class="inspect-header-actions" id="inspectHeaderActions">
+              <button class="btn btn-secondary" id="changeAssetBtn" title="调整资产">调整资产</button>
+              <button class="btn btn-primary" id="finishInspect">提交检查结果</button>
+            </div>
           </div>
           <div class="inspect-task-detail" id="inspectTaskDetail"></div>
           <div class="inspect-search-bar">
@@ -165,8 +185,13 @@
               <label>检查结果</label>
               <select id="inspectResultFilter" class="search-input">
                 <option value="">请选择</option>
-                <option value="pass">通过</option>
-                <option value="fail">不通过</option>
+                <option value="match">符合</option>
+                <option value="partial">部分符合</option>
+                <option value="mismatch">不符合</option>
+                <option value="na">不适用</option>
+                <option value="custom">其他</option>
+                <option value="pass">通过（兼容旧）</option>
+                <option value="fail">不通过（兼容旧）</option>
               </select>
             </div>
             <button type="button" class="btn btn-primary" id="inspectSearchBtn">🔍 搜索</button>
@@ -183,14 +208,44 @@
                 <thead>
                   <tr>
                     <th>检查要点</th>
-                    <th>问题</th>
-                    <th>备注</th>
+                    <th>是否自动检查</th>
+                    <th>检查结果</th>
                     <th>附件</th>
                   </tr>
                 </thead>
                 <tbody id="inspectTableBody"></tbody>
               </table>
               <div class="pagination" id="inspectPagination"></div>
+            </div>
+          </div>
+        </div>
+        <!-- 查看结果视图（省公司查看各单位及多次上传） -->
+        <div id="verifyView" class="hidden">
+          <div class="panel-header inspect-header">
+            <div><h2>查看检查结果</h2><button class="btn btn-secondary" id="backFromVerify">← 返回任务列表</button></div>
+            <button class="btn btn-danger" id="verifySubmitComments">提交评论</button>
+          </div>
+          <div id="verifyTaskInfo"></div>
+          <div class="verify-layout">
+            <div class="verify-sidebar">
+              <h4>各单位检查结果</h4>
+              <div id="verifyPeriodFilter" class="verify-period-filter hidden"></div>
+              <ul id="verifyUnitList"></ul>
+            </div>
+            <div class="verify-main">
+              <div id="verifyUploadTabs"></div>
+              <table class="data-table inspect-table">
+                <thead>
+                  <tr>
+                    <th>检查要点</th>
+                    <th>是否自动检查</th>
+                    <th>检查结果</th>
+                    <th>附件</th>
+                    <th>审核评论</th>
+                  </tr>
+                </thead>
+                <tbody id="verifyTableBody"></tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -220,6 +275,62 @@
               </table>
             </div>
           </div>
+        </div>
+      </section>
+
+      <!-- 4. 运营指标 -->
+      <section id="opsMetrics" class="panel">
+        <div class="panel-header">
+          <h2>运营指标管理</h2>
+          <div class="panel-actions">
+            <button class="btn btn-primary btn-sm" id="opsSaveBtn">保存当天数据</button>
+          </div>
+        </div>
+        <div class="ops-tabs">
+          <button class="ops-tab" data-ops-tab="security">安全运营指标</button>
+          <button class="ops-tab active" data-ops-tab="local">本地运营指标</button>
+          <button class="ops-tab" data-ops-tab="network">网络运营指标</button>
+        </div>
+
+        <div class="ops-subview" id="opsSecurityView">
+          <p class="ops-placeholder">安全运营指标（示意区）：可保留现有模块逻辑。</p>
+        </div>
+
+        <div class="ops-subview" id="opsLocalView">
+          <div class="ops-toolbar">
+            <div class="search-field">
+              <label>日期</label>
+              <input type="date" id="opsDate" class="search-input">
+            </div>
+            <div class="search-field">
+              <label>指标名称</label>
+              <input type="text" id="opsKeyword" class="search-input" placeholder="请输入指标名称">
+            </div>
+            <button class="btn btn-primary" id="opsSearchBtn">查询</button>
+            <button class="btn btn-secondary" id="opsAddMetricBtn">新增指标</button>
+          </div>
+          <div class="ops-content-card table-wrapper">
+            <table class="data-table ops-table">
+              <thead>
+                <tr>
+                  <th>指标名称</th>
+                  <th>分数</th>
+                  <th>权重(%)</th>
+                  <th>加权得分</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="opsTableBody"></tbody>
+            </table>
+          </div>
+          <div class="ops-summary">
+            <span id="opsModifiedHint" class="ops-modified-hint ops-source-default">数据来源：默认前一天</span>
+            <span class="ops-total">当日运营总分：<strong id="opsTotalScore">0.00</strong></span>
+          </div>
+        </div>
+
+        <div class="ops-subview" id="opsNetworkView">
+          <p class="ops-placeholder">网络运营指标（示意区）：可保留现有模块逻辑。</p>
         </div>
       </section>
     </main>
@@ -290,14 +401,15 @@
             <input type="text" name="taskName" maxlength="50" placeholder="请输入任务名称" required>
           </div>
           <div class="form-group">
-            <label>选择资产</label>
-            <select name="asset">
-              <option value="">请选择系统</option>
-              <option value="OA系统">OA系统</option>
-              <option value="财务系统">财务系统</option>
-              <option value="HR系统">HR系统</option>
-              <option value="安全管控平台">安全管控平台</option>
-            </select>
+            <label>下发单位 <span class="required">*</span></label>
+              <div class="check-item-select" id="unitOptions">
+              <!-- 排除省公司，只选下属单位 -->
+            </div>
+          </div>
+          <div class="form-group">
+            <label>任务截止时间 <span class="required">*</span></label>
+            <input type="datetime-local" name="deadline" required>
+            <p class="hint">分公司须在截止时间前完成检查，超期将无法执行；截止时间到达后任务自动结束</p>
           </div>
           <div class="form-group">
             <label>检查范围 <span class="required">*</span></label>
@@ -323,6 +435,27 @@
             <button type="submit" class="btn btn-primary">创建任务</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：选择资产（分公司执行检查前） -->
+  <div class="modal" id="selectAssetModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>选择资产</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint">请先选择要检查的资产（支持多选），再开始检查</p>
+        <div class="form-group">
+          <label>选择资产 <span class="required">*</span></label>
+          <div id="selectAssetList" class="checkbox-list"></div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary modal-cancel">取消</button>
+          <button type="button" class="btn btn-primary" id="confirmSelectAsset">确定</button>
+        </div>
       </div>
     </div>
   </div>
@@ -363,6 +496,76 @@
     </div>
   </div>
 
+  <!-- 模态框：导入检查项（Excel） -->
+  <div class="modal" id="excelImportModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>导入检查项</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="import-actions">
+          <a href="#" class="btn btn-secondary" id="downloadExcelTemplate">下载模板</a>
+          <label class="btn btn-primary" for="excelImportInput">选择文件</label>
+          <input type="file" id="excelImportInput" accept=".xlsx,.xls" style="display:none">
+        </div>
+        <p class="import-hint">请先下载模板，按格式填写后选择 Excel 文件导入</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 模态框：新建检查项 -->
+  <div class="modal" id="manualImportModal">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h3>新建检查项</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="manualImportForm">
+          <div class="form-row">
+            <div class="form-group">
+              <label>检查类别 <span class="required">*</span></label>
+              <input type="text" name="category" placeholder="如：数据安全" required>
+            </div>
+            <div class="form-group">
+              <label>检查事项 <span class="required">*</span></label>
+              <input type="text" name="item" placeholder="如：数据安全制度建设" required>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>检查要求 <span class="required">*</span></label>
+            <input type="text" name="requirement" placeholder="如：是否建立网络安全责任制" required>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>检查方式</label>
+              <input type="text" name="method" placeholder="如：1.登陆系统验证 2.材料检查">
+            </div>
+            <div class="form-group">
+              <label>所属合规文件</label>
+              <select name="fileId">
+                <option value="">请选择</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>检查要点</label>
+            <textarea name="keyPoints" rows="3" placeholder="每行一条，如：&#10;核查网络安全责任制文件&#10;检查责任落实情况"></textarea>
+          </div>
+          <div class="form-group">
+            <label>需要被检查单位配合事项</label>
+            <textarea name="cooperation" rows="3" placeholder="每行一条，如：&#10;网络安全责任制制度&#10;责任落实台账"></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary modal-cancel">取消</button>
+            <button type="submit" class="btn btn-primary">保存</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
   <!-- 模态框：合规文件详情（检查要点、需要被检查单位配合事项） -->
   <div class="modal" id="itemDetailModal">
     <div class="modal-content modal-lg">
@@ -374,6 +577,7 @@
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
