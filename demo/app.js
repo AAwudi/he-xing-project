@@ -75,12 +75,6 @@ let inspectSelectedItem = null;
 let inspectUploadItemId = null;
 let INSPECT_PAGE_SIZE = 10;
 let inspectCurrentPage = 1;
-const LOCAL_METRIC_DEFAULTS = [
-  '资产信息泄漏检查', '等保备案', '等保评测', '基线检查', '代码审计', '威胁情报', '安全服务'
-];
-let opsMetricsByDate = {};
-let currentOpsDate = '';
-let currentOpsFilteredKeyword = '';
 
 // ============ 渲染 ============
 function renderComplianceGrid() {
@@ -487,6 +481,9 @@ document.querySelectorAll('.nav-item').forEach(item => {
     document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
     item.classList.add('active');
     document.getElementById(item.dataset.tab).classList.add('active');
+    if (item.dataset.tab === 'graphAnalysis') {
+      resetGraphToInitialState();
+    }
   });
 });
 
@@ -1648,157 +1645,919 @@ document.getElementById('currentUnitSelect')?.addEventListener('change', (e) => 
   renderTasks();
 });
 
-// ============ 本地运营指标 ============
-function getDateStr(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+// ============ 图谱分析 ============
+const graphAssets = [
+  {
+    id: 'ga1', ip: '10.10.1.11', name: 'OA系统', owner: '张三', riskScore: 96,
+    vulnerabilities: [
+      { id: 'gv1', cve: 'CVE-2025-1001', name: '远程代码执行', level: 'high', type: 'Web中间件', desc: '存在远程执行风险', suggestion: '升级组件并开启WAF' },
+      { id: 'gv2', cve: 'CVE-2025-1002', name: '弱口令', level: 'medium', type: '账号安全', desc: '存在默认口令账号', suggestion: '强制口令复杂度策略' }
+    ],
+    compliances: [
+      { id: 'gc1', file: '等级保护2.0', item: '身份鉴别机制', status: 'fail' },
+      { id: 'gc2', file: '等级保护2.0', item: '日志审计', status: 'pass' }
+    ],
+    links: [{ vulnerabilityId: 'gv1', complianceId: 'gc1' }]
+  },
+  {
+    id: 'ga2', ip: '10.10.1.22', name: '财务系统', owner: '李四', riskScore: 90,
+    vulnerabilities: [{ id: 'gv3', cve: 'CVE-2025-1003', name: 'SQL注入', level: 'high', type: '应用安全', desc: '参数过滤不足', suggestion: '参数化查询并增加WAF规则' }],
+    compliances: [{ id: 'gc3', file: '数据安全管理办法', item: '敏感字段脱敏', status: 'fail' }],
+    links: [{ vulnerabilityId: 'gv3', complianceId: 'gc3' }]
+  },
+  { id: 'ga3', ip: '10.10.1.33', name: 'HR系统', owner: '王五', riskScore: 84, vulnerabilities: [{ id: 'gv4', cve: 'CVE-2025-1004', name: '越权访问', level: 'medium', type: '权限控制', desc: '权限边界校验不足', suggestion: '补充服务端鉴权' }], compliances: [{ id: 'gc4', file: '个人信息保护', item: '最小权限', status: 'fail' }], links: [{ vulnerabilityId: 'gv4', complianceId: 'gc4' }] },
+  { id: 'ga4', ip: '10.10.1.44', name: '统一认证', owner: '赵六', riskScore: 79, vulnerabilities: [{ id: 'gv5', cve: 'CVE-2025-1005', name: '证书过期', level: 'low', type: '证书管理', desc: '证书更新策略不完善', suggestion: '建立证书巡检告警' }], compliances: [{ id: 'gc5', file: '等级保护2.0', item: '密码策略', status: 'pass' }], links: [] },
+  { id: 'ga5', ip: '10.10.1.55', name: '运维平台', owner: '钱七', riskScore: 75, vulnerabilities: [{ id: 'gv6', cve: 'CVE-2025-1006', name: '未授权访问', level: 'high', type: '接口安全', desc: '接口缺少鉴权', suggestion: '接入统一鉴权网关' }], compliances: [{ id: 'gc6', file: '关基保护要求', item: '远程运维审计', status: 'fail' }], links: [{ vulnerabilityId: 'gv6', complianceId: 'gc6' }] },
+  { id: 'ga6', ip: '10.10.1.66', name: '日志平台', owner: '孙八', riskScore: 70, vulnerabilities: [{ id: 'gv7', cve: 'CVE-2025-1007', name: '目录遍历', level: 'medium', type: '文件安全', desc: '目录访问控制不足', suggestion: '限制文件访问路径' }], compliances: [{ id: 'gc7', file: '等级保护2.0', item: '日志完整性', status: 'pass' }], links: [] },
+  { id: 'ga7', ip: '10.10.1.77', name: '客户中心', owner: '周九', riskScore: 68, vulnerabilities: [{ id: 'gv8', cve: 'CVE-2025-1008', name: '会话固定', level: 'low', type: '会话管理', desc: '会话更新不及时', suggestion: '登录后强制刷新会话ID' }], compliances: [{ id: 'gc8', file: '隐私保护要求', item: '会话生命周期', status: 'pass' }], links: [] },
+  { id: 'ga8', ip: '10.10.1.88', name: '工单系统', owner: '吴十', riskScore: 63, vulnerabilities: [{ id: 'gv9', cve: 'CVE-2025-1009', name: '信息泄露', level: 'medium', type: '配置安全', desc: '错误信息暴露堆栈', suggestion: '统一异常处理策略' }], compliances: [{ id: 'gc9', file: '等级保护2.0', item: '错误处理', status: 'fail' }], links: [{ vulnerabilityId: 'gv9', complianceId: 'gc9' }] },
+  { id: 'ga9', ip: '10.10.1.99', name: 'CMDB', owner: '郑十一', riskScore: 61, vulnerabilities: [{ id: 'gv10', cve: 'CVE-2025-1010', name: '跨站脚本', level: 'high', type: '输入验证', desc: '前端输出未编码', suggestion: '增加输出编码和CSP' }], compliances: [{ id: 'gc10', file: '网络安全法', item: '输入校验', status: 'fail' }], links: [{ vulnerabilityId: 'gv10', complianceId: 'gc10' }] },
+  { id: 'ga10', ip: '10.10.1.110', name: '堡垒机', owner: '王十二', riskScore: 58, vulnerabilities: [{ id: 'gv11', cve: 'CVE-2025-1011', name: '弱加密算法', level: 'low', type: '密码学', desc: 'TLS版本偏低', suggestion: '升级至TLS1.2+' }], compliances: [{ id: 'gc11', file: '关基保护要求', item: '加密传输', status: 'pass' }], links: [] }
+];
+let graphViewMode = 'overview';
+let graphSelectedAssetId = null;
+const GRAPH_DEFAULT_FILTER = {
+  assetIp: '',
+  assetName: '',
+  vulnerabilityName: '',
+  complianceFile: '',
+  complianceItem: '',
+  riskLevel: ''
+};
+const GRAPH_FIELD_INPUT_MAP = {
+  assetIp: 'graphSearchAssetIp',
+  assetName: 'graphSearchAssetName',
+  vulnerabilityName: 'graphSearchVulnName',
+  complianceFile: 'graphSearchComplianceFile',
+  complianceItem: 'graphSearchComplianceItem'
+};
+let graphCurrentFilter = { ...GRAPH_DEFAULT_FILTER };
+let graphCurrentNodes = [];
+let graphCurrentEdges = [];
+let graphActiveNodeId = null;
+
+/** 视口：平移 + 缩放（画布坐标系） */
+let graphPanX = 0;
+let graphPanY = 0;
+let graphScale = 1;
+const GRAPH_VIEW_SCALE_MIN = 0.2;
+const GRAPH_VIEW_SCALE_MAX = 5;
+
+let graphPanning = false;
+let graphPanLastX = 0;
+let graphPanLastY = 0;
+
+let graphNodeDrag = null;
+let graphSuppressClickNodeId = null;
+let graphSpringRaf = null;
+let graphHoverId = null;
+
+function showGraphTopPanel() {
+  document.getElementById('graphTopPanel')?.classList.remove('hidden');
+  document.getElementById('graphDetailPanel')?.classList.add('hidden');
 }
 
-function cloneMetrics(metrics) {
-  return (metrics || []).map(m => ({ ...m }));
+function showGraphDetailPanel() {
+  document.getElementById('graphTopPanel')?.classList.add('hidden');
+  document.getElementById('graphDetailPanel')?.classList.remove('hidden');
 }
 
-function buildDefaultLocalMetrics() {
-  const defaultWeight = +(100 / LOCAL_METRIC_DEFAULTS.length).toFixed(2);
-  return LOCAL_METRIC_DEFAULTS.map(name => ({ name, score: 0, weight: defaultWeight }));
+function getGraphAssetVulnCount(a) {
+  return (a.vulnerabilities || []).length;
 }
 
-function getOrInitOpsRecord(dateStr) {
-  if (opsMetricsByDate[dateStr]) return opsMetricsByDate[dateStr];
-  const d = new Date(`${dateStr}T00:00:00`);
-  d.setDate(d.getDate() - 1);
-  const prevDate = getDateStr(d);
-  const prev = opsMetricsByDate[prevDate];
-  opsMetricsByDate[dateStr] = {
-    metrics: prev ? cloneMetrics(prev.metrics) : buildDefaultLocalMetrics(),
-    source: prev ? 'default-prev-day' : 'default-init',
-    modifiedAt: '',
-    modifiedBy: ''
+function getGraphAssetFailComplianceCount(a) {
+  return (a.compliances || []).filter(c => c.status === 'fail').length;
+}
+
+function graphAssetHasHighVuln(a) {
+  return (a.vulnerabilities || []).some(v => v.level === 'high');
+}
+
+/** 综合排序用：漏洞数 + 不合规项数 */
+function getGraphRiskSimpleMetric(a) {
+  return getGraphAssetVulnCount(a) + getGraphAssetFailComplianceCount(a);
+}
+
+/** Top5：先「含高危漏洞」的资产，再按 漏洞数+不合规数 降序 */
+function getGraphTopAssets() {
+  return [...graphAssets]
+    .sort((a, b) => {
+      const ha = graphAssetHasHighVuln(a) ? 1 : 0;
+      const hb = graphAssetHasHighVuln(b) ? 1 : 0;
+      if (hb !== ha) return hb - ha;
+      return getGraphRiskSimpleMetric(b) - getGraphRiskSimpleMetric(a);
+    })
+    .slice(0, 5);
+}
+
+function getGraphStats(assets) {
+  const vulns = assets.flatMap(a => a.vulnerabilities || []);
+  const comps = assets.flatMap(a => a.compliances || []);
+  return {
+    high: vulns.filter(v => v.level === 'high').length,
+    medium: vulns.filter(v => v.level === 'medium').length,
+    low: vulns.filter(v => v.level === 'low').length,
+    complianceRate: comps.length ? Math.round((comps.filter(c => c.status === 'pass').length / comps.length) * 100) : 100
   };
-  return opsMetricsByDate[dateStr];
 }
 
-function calcOpsTotal(metrics) {
-  return (metrics || []).reduce((sum, m) => {
-    const score = Number(m.score) || 0;
-    const weight = Number(m.weight) || 0;
-    return sum + (score * weight / 100);
-  }, 0);
+function lineBetween(p1, p2) {
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
+  return { left: p1.x, top: p1.y, width: Math.sqrt(dx * dx + dy * dy), angle: Math.atan2(dy, dx) * 180 / Math.PI };
 }
 
-function renderOpsTabs(activeTab) {
-  document.querySelectorAll('.ops-tab').forEach(btn => {
-    const on = btn.dataset.opsTab === activeTab;
-    btn.classList.toggle('active', on);
-  });
-  const map = { security: 'opsSecurityView', local: 'opsLocalView', network: 'opsNetworkView' };
-  Object.values(map).forEach(id => document.getElementById(id)?.classList.remove('active'));
-  document.getElementById(map[activeTab])?.classList.add('active');
-}
-
-function renderOpsLocalTable() {
-  const dateStr = document.getElementById('opsDate')?.value;
-  if (!dateStr) return;
-  currentOpsDate = dateStr;
-  const record = getOrInitOpsRecord(dateStr);
-  const kw = (document.getElementById('opsKeyword')?.value || '').trim().toLowerCase();
-  currentOpsFilteredKeyword = kw;
-  const list = record.metrics.filter(m => !kw || m.name.toLowerCase().includes(kw));
-  const tbody = document.getElementById('opsTableBody');
-  tbody.innerHTML = list.map((m, idx) => {
-    const realIdx = record.metrics.findIndex(x => x.name === m.name && Number(x.score) === Number(m.score) && Number(x.weight) === Number(m.weight));
-    const weighted = ((Number(m.score) || 0) * (Number(m.weight) || 0) / 100).toFixed(2);
-    return `<tr>
-      <td>${m.name}</td>
-      <td><input class="ops-score-input" type="number" min="0" max="100" step="0.01" data-role="score" data-idx="${realIdx}" value="${m.score}"></td>
-      <td><input class="ops-weight-input" type="number" min="0" max="100" step="0.01" data-role="weight" data-idx="${realIdx}" value="${m.weight}"></td>
-      <td>${weighted}</td>
-      <td><button class="btn btn-danger btn-sm" data-role="deleteMetric" data-idx="${realIdx}">删除</button></td>
-    </tr>`;
-  }).join('');
-
-  const total = calcOpsTotal(record.metrics).toFixed(2);
-  document.getElementById('opsTotalScore').textContent = total;
-  const hintEl = document.getElementById('opsModifiedHint');
-  const sourceText = record.source === 'manual'
-    ? `数据来源：人工修改（${record.modifiedAt || '-' }）`
-    : '数据来源：默认前一天';
-  hintEl.textContent = sourceText;
-  hintEl.classList.toggle('ops-source-manual', record.source === 'manual');
-  hintEl.classList.toggle('ops-source-default', record.source !== 'manual');
-
-  tbody.querySelectorAll('input[data-role]').forEach(input => {
-    input.addEventListener('change', () => {
-      const i = Number(input.dataset.idx);
-      const role = input.dataset.role;
-      const val = Number(input.value);
-      if (Number.isNaN(val) || val < 0 || val > 100) {
-        alert(`${role === 'score' ? '分数' : '权重'}需在0-100之间`);
-        renderOpsLocalTable();
-        return;
-      }
-      record.metrics[i][role] = +val.toFixed(2);
-      record.source = 'manual';
-      record.modifiedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
-      record.modifiedBy = '当前用户';
-      renderOpsLocalTable();
-    });
-  });
-
-  tbody.querySelectorAll('button[data-role="deleteMetric"]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const i = Number(btn.dataset.idx);
-      if (confirm('确定删除该指标？')) {
-        record.metrics.splice(i, 1);
-        record.source = 'manual';
-        record.modifiedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
-        record.modifiedBy = '当前用户';
-        renderOpsLocalTable();
-      }
-    });
+function graphSnapshotEquilibrium() {
+  graphCurrentNodes.forEach(n => {
+    n.eqX = n.x;
+    n.eqY = n.y;
   });
 }
 
-function initOpsMetrics() {
-  const dateInput = document.getElementById('opsDate');
-  if (!dateInput) return;
-  if (!dateInput.value) dateInput.value = getDateStr(new Date());
-  currentOpsDate = dateInput.value;
-  getOrInitOpsRecord(currentOpsDate);
-  renderOpsTabs('local');
-  renderOpsLocalTable();
+function graphResetViewport() {
+  graphPanX = graphPanY = 0;
+  graphScale = 1;
+}
 
-  document.querySelectorAll('.ops-tab').forEach(btn => {
-    btn.addEventListener('click', () => renderOpsTabs(btn.dataset.opsTab));
+function graphGetOrCreateViewport(canvas) {
+  let vp = canvas.querySelector('.graph-viewport');
+  if (!vp) {
+    vp = document.createElement('div');
+    vp.className = 'graph-viewport';
+    canvas.appendChild(vp);
+  }
+  return vp;
+}
+
+function graphApplyViewportTransform() {
+  const vp = document.querySelector('#graphCanvas .graph-viewport');
+  if (vp) vp.style.transform = `translate(${graphPanX}px, ${graphPanY}px) scale(${graphScale})`;
+}
+
+function graphSyncNodeActionsPosition() {
+  const bubble = document.querySelector('#graphCanvas .graph-node-actions');
+  if (!bubble || !graphActiveNodeId) return;
+  const node = graphCurrentNodes.find(n => n.id === graphActiveNodeId);
+  if (!node || typeof node.x !== 'number') return;
+  bubble.style.left = `${node.x}px`;
+  bubble.style.top = `${node.y}px`;
+}
+
+/** 根据 graphCurrentNodes / graphCurrentEdges 更新已有边的几何（不重挂载 DOM） */
+function graphRefreshEdgeGeometry() {
+  const vp = document.querySelector('#graphCanvas .graph-viewport');
+  if (!vp) return;
+  const edgeEls = vp.querySelectorAll('.graph-edge');
+  graphCurrentEdges.forEach((edge, idx) => {
+    const edgeEl = edgeEls[idx];
+    if (!edgeEl) return;
+    const from = graphCurrentNodes.find(n => n.id === edge.from);
+    const to = graphCurrentNodes.find(n => n.id === edge.to);
+    if (!from || !to) return;
+    const line = lineBetween(from, to);
+    edgeEl.style.left = `${line.left}px`;
+    edgeEl.style.top = `${line.top}px`;
+    edgeEl.style.width = `${line.width}px`;
+    edgeEl.style.transform = `rotate(${line.angle}deg)`;
   });
-  document.getElementById('opsSearchBtn')?.addEventListener('click', renderOpsLocalTable);
-  document.getElementById('opsDate')?.addEventListener('change', renderOpsLocalTable);
-  document.getElementById('opsAddMetricBtn')?.addEventListener('click', () => {
-    const name = prompt('请输入新增指标名称');
-    if (!name || !name.trim()) return;
-    const metricName = name.trim();
-    const record = getOrInitOpsRecord(document.getElementById('opsDate').value);
-    if (record.metrics.some(m => m.name === metricName)) {
-      alert('指标名称已存在');
+}
+
+function graphRefreshNodeElementsPosition() {
+  const vp = document.querySelector('#graphCanvas .graph-viewport');
+  if (!vp) return;
+  graphCurrentNodes.forEach(n => {
+    const el = vp.querySelector(`.graph-node[data-node-id="${CSS.escape(n.id)}"]`);
+    if (el) {
+      el.style.left = `${n.x}px`;
+      el.style.top = `${n.y}px`;
+    }
+  });
+  graphRefreshEdgeGeometry();
+  graphSyncNodeActionsPosition();
+}
+
+function graphCancelSpring() {
+  if (graphSpringRaf != null) {
+    cancelAnimationFrame(graphSpringRaf);
+    graphSpringRaf = null;
+  }
+}
+
+/** 受力近似回弹：阻尼弹簧到 (eqX, eqY) */
+function graphSpringNodeToEquilibrium(node) {
+  graphCancelSpring();
+  const stiffness = 0.18;
+  const damping = 0.82;
+  let vx = 0;
+  let vy = 0;
+  function tick() {
+    const dx = node.eqX - node.x;
+    const dy = node.eqY - node.y;
+    if (Math.hypot(dx, dy) < 0.35 && Math.hypot(vx, vy) < 0.08) {
+      node.x = node.eqX;
+      node.y = node.eqY;
+      graphRefreshNodeElementsPosition();
+      graphSpringRaf = null;
       return;
     }
-    record.metrics.push({ name: metricName, score: 0, weight: 0 });
-    record.source = 'manual';
-    record.modifiedAt = new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-');
-    record.modifiedBy = '当前用户';
-    renderOpsLocalTable();
+    vx = (vx + dx * stiffness) * damping;
+    vy = (vy + dy * stiffness) * damping;
+    node.x += vx;
+    node.y += vy;
+    graphRefreshNodeElementsPosition();
+    graphSpringRaf = requestAnimationFrame(tick);
+  }
+  graphSpringRaf = requestAnimationFrame(tick);
+}
+
+function graphNeighborIdsOf(nodeId) {
+  const set = new Set();
+  graphCurrentEdges.forEach(e => {
+    if (e.from === nodeId) set.add(e.to);
+    if (e.to === nodeId) set.add(e.from);
   });
-  document.getElementById('opsSaveBtn')?.addEventListener('click', () => {
-    const record = getOrInitOpsRecord(document.getElementById('opsDate').value);
-    const weightSum = record.metrics.reduce((sum, m) => sum + (Number(m.weight) || 0), 0);
-    if (Math.abs(weightSum - 100) > 0.01) {
-      alert(`已保存，但提示：当前权重总和为 ${weightSum.toFixed(2)}，建议为100`);
-    } else {
-      alert('保存成功');
+  return set;
+}
+
+function graphClearHoverVisual() {
+  graphHoverId = null;
+  const canvas = document.getElementById('graphCanvas');
+  if (!canvas) return;
+  canvas.classList.remove('graph-hover-active');
+  canvas.querySelectorAll('.graph-hover-dim, .graph-hover-line, .graph-hover-focus').forEach(el => {
+    el.classList.remove('graph-hover-dim', 'graph-hover-line', 'graph-hover-focus');
+  });
+}
+
+function graphApplyHoverVisual(hoverId) {
+  const canvas = document.getElementById('graphCanvas');
+  if (!canvas) return;
+  graphClearHoverVisual();
+  if (!hoverId) return;
+  graphHoverId = hoverId;
+  const neighbors = graphNeighborIdsOf(hoverId);
+  const keepNodes = new Set([hoverId, ...neighbors]);
+
+  canvas.classList.add('graph-hover-active');
+  canvas.querySelectorAll('.graph-edge').forEach((el, idx) => {
+    const e = graphCurrentEdges[idx];
+    if (!e) return;
+    const incident = e.from === hoverId || e.to === hoverId;
+    el.classList.toggle('graph-hover-line', incident);
+    el.classList.toggle('graph-hover-dim', !incident);
+  });
+  canvas.querySelectorAll('.graph-node').forEach(el => {
+    const id = el.dataset.nodeId;
+    if (!id) return;
+    const keep = keepNodes.has(id);
+    el.classList.toggle('graph-hover-focus', id === hoverId);
+    el.classList.toggle('graph-hover-dim', !keep);
+  });
+}
+
+function graphZoomAtPoint(canvas, clientX, clientY, factor) {
+  const rect = canvas.getBoundingClientRect();
+  const px = clientX - rect.left;
+  const py = clientY - rect.top;
+  const worldX = (px - graphPanX) / graphScale;
+  const worldY = (py - graphPanY) / graphScale;
+  const nextScale = Math.min(GRAPH_VIEW_SCALE_MAX, Math.max(GRAPH_VIEW_SCALE_MIN, graphScale * factor));
+  if (nextScale === graphScale) return;
+  graphScale = nextScale;
+  graphPanX = px - worldX * graphScale;
+  graphPanY = py - worldY * graphScale;
+  graphApplyViewportTransform();
+}
+
+function ensureGraphCanvasStage() {
+  const canvas = document.getElementById('graphCanvas');
+  if (!canvas || canvas.dataset.graphStageBound) return;
+  canvas.dataset.graphStageBound = '1';
+  canvas.style.touchAction = 'none';
+
+  canvas.addEventListener('wheel', e => {
+    if (!document.getElementById('graphAnalysis')?.classList.contains('active')) return;
+    e.preventDefault();
+    const delta = e.deltaY;
+    const factor = delta < 0 ? 1.08 : 1 / 1.08;
+    graphZoomAtPoint(canvas, e.clientX, e.clientY, factor);
+  }, { passive: false });
+
+  canvas.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.graph-node')) return;
+    graphPanning = true;
+    graphPanLastX = e.clientX;
+    graphPanLastY = e.clientY;
+    canvas.classList.add('graph-panning');
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!graphPanning) return;
+    const dx = e.clientX - graphPanLastX;
+    const dy = e.clientY - graphPanLastY;
+    graphPanLastX = e.clientX;
+    graphPanLastY = e.clientY;
+    graphPanX += dx;
+    graphPanY += dy;
+    graphApplyViewportTransform();
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (graphPanning) {
+      graphPanning = false;
+      canvas.classList.remove('graph-panning');
     }
   });
+
+  if (!canvas.dataset.graphNodeDragBound) {
+    window.addEventListener('mousemove', graphNodeOnMove);
+    window.addEventListener('mouseup', graphNodeOnUp);
+    canvas.dataset.graphNodeDragBound = '1';
+  }
+
+  let pinchStartDist = 0;
+  let pinchStartScale = 1;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const [a, b] = [e.touches[0], e.touches[1]];
+      pinchStartDist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      pinchStartScale = graphScale;
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && pinchStartDist > 0) {
+      e.preventDefault();
+      const [a, b] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+      const midX = (a.clientX + b.clientX) / 2;
+      const midY = (a.clientY + b.clientY) / 2;
+      const ratio = dist / pinchStartDist;
+      const targetScale = Math.min(GRAPH_VIEW_SCALE_MAX, Math.max(GRAPH_VIEW_SCALE_MIN, pinchStartScale * ratio));
+      const factor = targetScale / graphScale;
+      graphZoomAtPoint(canvas, midX, midY, factor);
+    }
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', () => {
+    pinchStartDist = 0;
+  });
+}
+
+function renderGraphEdges(viewport) {
+  const host = viewport || document.getElementById('graphCanvas');
+  if (!host) return;
+  graphCurrentEdges.forEach((edge, edgeIdx) => {
+    const from = graphCurrentNodes.find(n => n.id === edge.from);
+    const to = graphCurrentNodes.find(n => n.id === edge.to);
+    if (!from || !to) return;
+    const line = lineBetween(from, to);
+    const edgeEl = document.createElement('div');
+    edgeEl.className = `graph-edge ${edge.type === 'cross' ? 'cross' : ''}`;
+    edgeEl.dataset.edgeIndex = String(edgeIdx);
+    edgeEl.style.left = `${line.left}px`;
+    edgeEl.style.top = `${line.top}px`;
+    edgeEl.style.width = `${line.width}px`;
+    edgeEl.style.transform = `rotate(${line.angle}deg)`;
+    host.appendChild(edgeEl);
+  });
+}
+
+function renderGraphNodes(viewport) {
+  const host = viewport || document.getElementById('graphCanvas');
+  if (!host) return;
+  graphCurrentNodes.forEach(n => {
+    const el = document.createElement('div');
+    el.dataset.nodeId = n.id;
+    el.className = `graph-node ${n.nodeType} ${n.level || n.status || ''} ${n.id === graphSelectedAssetId || n.id === graphActiveNodeId || n.active ? 'active' : ''}`;
+    el.style.left = `${n.x}px`;
+    el.style.top = `${n.y}px`;
+    el.innerHTML = `<strong>${n.title}</strong><small>${n.subTitle || ''}</small>`;
+
+    el.addEventListener('mousedown', ev => {
+      if (ev.button !== 0) return;
+      ev.stopPropagation();
+      hideGraphNodeActions();
+      graphCancelSpring();
+      graphNodeDrag = {
+        node: n,
+        startX: ev.clientX,
+        startY: ev.clientY,
+        origX: n.x,
+        origY: n.y,
+        moved: false
+      };
+    });
+
+    el.addEventListener('click', ev => {
+      if (graphSuppressClickNodeId === n.id) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        return;
+      }
+      onGraphNodeClick(n);
+    });
+
+    el.addEventListener('mouseenter', () => graphApplyHoverVisual(n.id));
+    el.addEventListener('mouseleave', () => graphClearHoverVisual());
+
+    host.appendChild(el);
+  });
+}
+
+function graphNodeOnMove(e) {
+  if (!graphNodeDrag) return;
+  const { node, startX, startY, origX, origY } = graphNodeDrag;
+  const canvas = document.getElementById('graphCanvas');
+  if (!canvas) return;
+  const dx = (e.clientX - startX) / graphScale;
+  const dy = (e.clientY - startY) / graphScale;
+  if (Math.hypot(e.clientX - startX, e.clientY - startY) > 4) graphNodeDrag.moved = true;
+  node.x = origX + dx;
+  node.y = origY + dy;
+  graphRefreshNodeElementsPosition();
+}
+
+function graphNodeOnUp() {
+  if (!graphNodeDrag) return;
+  const { node, moved } = graphNodeDrag;
+  graphNodeDrag = null;
+  if (moved) {
+    graphSuppressClickNodeId = node.id;
+    window.setTimeout(() => {
+      if (graphSuppressClickNodeId === node.id) graphSuppressClickNodeId = null;
+    }, 0);
+    graphSpringNodeToEquilibrium(node);
+  }
+}
+
+function renderGraphCanvas() {
+  const canvas = document.getElementById('graphCanvas');
+  if (!canvas) return;
+  graphClearHoverVisual();
+  graphCancelSpring();
+  canvas.innerHTML = '';
+  const viewport = graphGetOrCreateViewport(canvas);
+  ensureGraphCanvasStage();
+  renderGraphEdges(viewport);
+  renderGraphNodes(viewport);
+  graphApplyViewportTransform();
+  if (!canvas.dataset.blankBound) {
+    canvas.addEventListener('click', evt => {
+      const onEmpty = evt.target === canvas || evt.target.classList.contains('graph-viewport');
+      if (onEmpty) hideGraphNodeActions();
+    });
+    canvas.dataset.blankBound = '1';
+  }
+}
+
+function renderGraphTopList(assets) {
+  const listEl = document.getElementById('graphTop10List');
+  if (!listEl) return;
+  listEl.innerHTML = assets.map((a, idx) => {
+    const metric = getGraphRiskSimpleMetric(a);
+    const v = getGraphAssetVulnCount(a);
+    const c = getGraphAssetFailComplianceCount(a);
+    const tip = `漏洞 ${v} · 不合规 ${c}${graphAssetHasHighVuln(a) ? ' · 含高危' : ''}`;
+    return `
+    <li data-id="${a.id}" class="${a.id === graphSelectedAssetId ? 'active' : ''}" title="${tip}">
+      <span>${idx + 1}. ${a.name}</span>
+      <strong title="${tip}">${metric}</strong>
+    </li>`;
+  }).join('');
+  listEl.querySelectorAll('li').forEach(li => {
+    li.addEventListener('click', () => {
+      const asset = graphAssets.find(x => x.id === li.dataset.id);
+      if (asset) openGraphDrilldown(asset);
+    });
+  });
+}
+
+function renderGraphStats(assets) {
+  const statEl = document.getElementById('graphGlobalStats');
+  if (!statEl) return;
+  const s = getGraphStats(assets);
+  statEl.innerHTML = `
+    <div>高危漏洞：<strong>${s.high}</strong>，中危：<strong>${s.medium}</strong>，低危：<strong>${s.low}</strong></div>
+    <div>当前视图合规率：<strong>${s.complianceRate}%</strong></div>
+  `;
+}
+
+function renderGraphDetail(contentHtml) {
+  const el = document.getElementById('graphNodeDetail');
+  if (el) {
+    showGraphDetailPanel();
+    el.innerHTML = contentHtml;
+  }
+}
+
+function getGraphAssetByNode(node) {
+  if (node.nodeType === 'asset') return graphAssets.find(a => a.id === node.id);
+  return graphAssets.find(a =>
+    (a.vulnerabilities || []).some(v => v.id === node.id) ||
+    (a.compliances || []).some(c => c.id === node.id)
+  );
+}
+
+function renderGraphUnifiedDetail(asset, node) {
+  if (!asset) return;
+  const vulnerabilities = asset.vulnerabilities || [];
+  const compliances = asset.compliances || [];
+  const complianceFileCount = new Set(compliances.map(c => c.file)).size;
+  const activeNodeTip = node ? `当前点击节点：${node.title || node.id}` : '当前点击节点：-';
+  renderGraphDetail(`
+    <h5>资产详情</h5>
+    <div class="detail-row"><span class="detail-label">资产IP：</span>${asset.ip}</div>
+    <div class="detail-row"><span class="detail-label">业务名称：</span>${asset.name}</div>
+    <div class="detail-row"><span class="detail-label">关联责任人：</span>${asset.owner}</div>
+    <div class="graph-detail-actions">
+      <button class="btn btn-sm btn-primary" id="graphGoAssetModule">查看资产模块</button>
+    </div>
+    <hr>
+    <h5>漏洞详情</h5>
+    <div class="detail-row"><span class="detail-label">漏洞总数：</span>${vulnerabilities.length}</div>
+    ${vulnerabilities.length ? vulnerabilities.map(v => `
+      <div class="detail-row"><span class="detail-label">漏洞名称：</span>${v.name}</div>
+      <div class="detail-row"><span class="detail-label">漏洞CVE：</span>${v.cve}</div>
+      <div class="detail-row"><span class="detail-label">漏洞类型：</span>${v.type}</div>
+      <div class="detail-row"><span class="detail-label">漏洞等级：</span>${v.level}</div>
+      <div class="detail-row"><span class="detail-label">---</span></div>
+    `).join('') : '<div class="detail-row">无漏洞数据</div>'}
+    <hr>
+    <h5>合规检查项详情</h5>
+    <div class="detail-row"><span class="detail-label">合规文件总数：</span>${complianceFileCount}</div>
+    ${compliances.length ? compliances.map(c => `
+      <div class="detail-row"><span class="detail-label">合规文件：</span>${c.file}</div>
+      <div class="detail-row"><span class="detail-label">合规检查项：</span>${c.item}</div>
+      <div class="detail-row"><span class="detail-label">检查结果：</span>${c.status === 'pass' ? '通过' : '未通过'}</div>
+      <div class="detail-row"><span class="detail-label">---</span></div>
+    `).join('') : '<div class="detail-row">无合规数据</div>'}
+    <div class="detail-row"><span class="detail-label">${activeNodeTip}</span></div>
+  `);
+  document.getElementById('graphGoAssetModule')?.addEventListener('click', () => {
+    alert('Demo：跳转到资产模块查看更多信息');
+  });
+}
+
+function setGraphSearchEchoByAsset(asset) {
+  if (!asset) return;
+  graphCurrentFilter = {
+    ...GRAPH_DEFAULT_FILTER,
+    assetIp: asset.ip || '',
+    assetName: asset.ip ? '' : (asset.name || '')
+  };
+  setGraphSearchInputs(graphCurrentFilter);
+}
+
+function setGraphSearchInputs(filter) {
+  const f = filter || GRAPH_DEFAULT_FILTER;
+  Object.entries(GRAPH_FIELD_INPUT_MAP).forEach(([field, inputId]) => {
+    const el = document.getElementById(inputId);
+    if (el) el.value = f[field] || '';
+  });
+  const riskEl = document.getElementById('graphRiskFilter');
+  if (riskEl) riskEl.value = f.riskLevel || '';
+}
+
+function resetGraphToInitialState() {
+  graphCurrentFilter = { ...GRAPH_DEFAULT_FILTER };
+  setGraphSearchInputs(graphCurrentFilter);
+  graphResetViewport();
+  renderGraphOverview();
+}
+
+function getComplianceDetailSource(comp) {
+  const row = (checkItems || []).find(i => (i.item || '').includes(comp.item) || comp.item.includes(i.item || ''));
+  if (!row) {
+    return {
+      fileName: comp.file,
+      keyPoints: ['请结合该检查项补充核查要点'],
+      cooperation: ['请补充被检单位配合材料']
+    };
+  }
+  const file = complianceFiles.find(f => f.id === row.fileId);
+  return {
+    fileName: file?.name || comp.file,
+    keyPoints: row.keyPoints && row.keyPoints.length ? row.keyPoints : ['-'],
+    cooperation: row.cooperation && row.cooperation.length ? row.cooperation : ['-']
+  };
+}
+
+function openGraphNodeDetailModal(node) {
+  const asset = getGraphAssetByNode(node);
+  if (!asset) return;
+  const titleEl = document.getElementById('graphNodeDetailModalTitle');
+  const bodyEl = document.getElementById('graphNodeDetailModalBody');
+  if (!titleEl || !bodyEl) return;
+  if (node.nodeType === 'vulnerability') {
+    const vuln = (asset.vulnerabilities || []).find(v => v.id === node.id);
+    if (!vuln) return;
+    titleEl.textContent = '漏洞详情';
+    bodyEl.innerHTML = `
+      <div class="graph-node-modal-grid">
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">漏洞名称</div><div class="graph-node-modal-value">${escapeHtml(vuln.name)}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">资产IP</div><div class="graph-node-modal-value">${escapeHtml(asset.ip)}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">资产名称</div><div class="graph-node-modal-value">${escapeHtml(asset.name)}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">关联责任人</div><div class="graph-node-modal-value">${escapeHtml(asset.owner)}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">漏洞等级</div><div class="graph-node-modal-value">${escapeHtml(vuln.level)}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">漏洞类型</div><div class="graph-node-modal-value">${escapeHtml(vuln.type)}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">CVE编号</div><div class="graph-node-modal-value">${escapeHtml(vuln.cve)}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">发现时间</div><div class="graph-node-modal-value">2026-03-12 16:02:02</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">漏洞描述</div><div class="graph-node-modal-value">${escapeHtml(vuln.desc || '-')}</div></div>
+        <div class="graph-node-modal-row"><div class="graph-node-modal-label">修复建议</div><div class="graph-node-modal-value">${escapeHtml(vuln.suggestion || '-')}</div></div>
+      </div>
+    `;
+  } else if (node.nodeType === 'compliance') {
+    const comp = (asset.compliances || []).find(c => c.id === node.id);
+    if (!comp) return;
+    const d = getComplianceDetailSource(comp);
+    titleEl.textContent = '合规检查项详情';
+    bodyEl.innerHTML = `
+      <div class="graph-node-modal-section">
+        <h4>合规文件</h4>
+        <div class="graph-node-modal-grid">
+          <div class="graph-node-modal-row"><div class="graph-node-modal-label">文件名称</div><div class="graph-node-modal-value">${escapeHtml(d.fileName)}</div></div>
+          <div class="graph-node-modal-row"><div class="graph-node-modal-label">检查项</div><div class="graph-node-modal-value">${escapeHtml(comp.item)}</div></div>
+          <div class="graph-node-modal-row"><div class="graph-node-modal-label">检查结果</div><div class="graph-node-modal-value">${comp.status === 'pass' ? '通过' : '未通过'}</div></div>
+        </div>
+      </div>
+      <div class="graph-node-modal-section">
+        <h4>检查要点</h4>
+        <ul class="graph-node-modal-list">
+          ${d.keyPoints.map(k => `<li>${escapeHtml(k)}</li>`).join('')}
+        </ul>
+      </div>
+      <div class="graph-node-modal-section">
+        <h4>需要被检查单位配合事项</h4>
+        <ul class="graph-node-modal-list">
+          ${d.cooperation.map(c => `<li>${escapeHtml(c)}</li>`).join('')}
+        </ul>
+      </div>
+    `;
+  } else {
+        return;
+      }
+  document.getElementById('graphNodeDetailModal')?.classList.add('show');
+}
+
+function openGraphNodeSearchWindow(node) {
+  if (!node) return;
+  if (node.nodeType !== 'vulnerability' && node.nodeType !== 'compliance') return;
+  const field = node.nodeType === 'vulnerability' ? 'vulnerabilityName' : 'complianceItem';
+  const keyword = node.title || node.subTitle || '';
+  const url = `${window.location.pathname}?${field}=${encodeURIComponent(keyword)}&focusNodeId=${encodeURIComponent(node.id)}`;
+  window.open(url, '_blank');
+}
+
+function applyGraphQueryParams() {
+  const params = new URLSearchParams(window.location.search || '');
+  const focusNodeId = params.get('focusNodeId');
+  const next = { ...GRAPH_DEFAULT_FILTER };
+  let hit = false;
+  Object.keys(GRAPH_FIELD_INPUT_MAP).forEach(field => {
+    const v = params.get(field);
+    if (v) { next[field] = v; hit = true; }
+  });
+  const legacyType = params.get('graphSearchType');
+  const legacyKeyword = params.get('keyword');
+  if (!hit && legacyKeyword) {
+    const legacyMap = {
+      asset: 'assetIp',
+      vulnerability: 'vulnerabilityName',
+      compliance: 'complianceItem',
+      assetIp: 'assetIp',
+      assetName: 'assetName',
+      vulnerabilityName: 'vulnerabilityName',
+      complianceFile: 'complianceFile',
+      complianceItem: 'complianceItem'
+    };
+    const field = legacyMap[legacyType] || 'assetIp';
+    next[field] = legacyKeyword;
+    hit = true;
+  }
+  if (hit) {
+    graphCurrentFilter = next;
+    setGraphSearchInputs(graphCurrentFilter);
+    renderGraphOverview();
+  }
+  if (focusNodeId) {
+    const focusAsset = graphAssets.find(a =>
+      a.id === focusNodeId ||
+      (a.vulnerabilities || []).some(v => v.id === focusNodeId) ||
+      (a.compliances || []).some(c => c.id === focusNodeId)
+    );
+    if (focusAsset) {
+      openGraphDrilldown(focusAsset);
+      const focusNode = graphCurrentNodes.find(n => n.id === focusNodeId);
+      if (focusNode) onGraphNodeClick(focusNode);
+    }
+  }
+}
+
+function renderGraphOverview() {
+  graphViewMode = 'overview';
+  graphSelectedAssetId = null;
+  graphActiveNodeId = null;
+  graphResetViewport();
+  const top = getGraphTopAssets();
+  const filtered = applyGraphFilters(top);
+  const cx = 420;
+  const cy = 290;
+  const radius = 210;
+  const assetNodes = filtered.map((a, idx) => {
+    const angle = (Math.PI * 2 / Math.max(filtered.length, 1)) * idx;
+    return {
+      id: a.id, nodeType: 'asset', title: `${a.name}`, subTitle: `${a.ip} · 风险分${a.riskScore}`, angle,
+      x: cx + Math.cos(angle) * radius,
+      y: cy + Math.sin(angle) * radius
+    };
+  });
+  graphCurrentNodes = [...assetNodes];
+  graphCurrentEdges = [];
+  assetNodes.forEach(assetNode => {
+    const asset = filtered.find(a => a.id === assetNode.id);
+    if (!asset) return;
+    const vulns = applyRiskLevelFilter(asset.vulnerabilities || []);
+    const comps = asset.compliances || [];
+    vulns.forEach((v, i) => {
+      const a = assetNode.angle + 0.45 + i * 0.35;
+      const node = {
+        id: v.id, nodeType: 'vulnerability', level: v.level, title: v.name, subTitle: v.cve,
+        x: assetNode.x + Math.cos(a) * 92, y: assetNode.y + Math.sin(a) * 92
+      };
+      graphCurrentNodes.push(node);
+      graphCurrentEdges.push({ from: asset.id, to: v.id, type: 'normal' });
+    });
+    comps.forEach((c, i) => {
+      const a = assetNode.angle - 0.45 - i * 0.35;
+      const node = {
+        id: c.id, nodeType: 'compliance', status: c.status, title: c.item, subTitle: c.file,
+        x: assetNode.x + Math.cos(a) * 92, y: assetNode.y + Math.sin(a) * 92
+      };
+      graphCurrentNodes.push(node);
+      graphCurrentEdges.push({ from: asset.id, to: c.id, type: 'normal' });
+    });
+    (asset.links || []).forEach(l => {
+      graphCurrentEdges.push({ from: l.vulnerabilityId, to: l.complianceId, type: 'cross' });
+    });
+  });
+  graphSnapshotEquilibrium();
+  renderGraphTopList(filtered);
+  renderGraphStats(filtered);
+  renderGraphCanvas();
+  document.getElementById('graphBreadcrumb').textContent = '全部资产';
+  document.getElementById('graphBackBtn')?.classList.add('hidden');
+  showGraphTopPanel();
+}
+
+function openGraphDrilldown(asset) {
+  graphViewMode = 'drilldown';
+  graphSelectedAssetId = asset.id;
+  graphActiveNodeId = asset.id;
+  graphResetViewport();
+  setGraphSearchEchoByAsset(asset);
+  const cx = 420;
+  const cy = 290;
+  graphCurrentNodes = [
+    { id: asset.id, nodeType: 'asset', title: asset.name, subTitle: `${asset.ip} · 责任人 ${asset.owner}`, x: cx, y: cy }
+  ];
+  const vulnerabilities = applyRiskLevelFilter(asset.vulnerabilities || []);
+  const compliances = asset.compliances || [];
+  const vulnR = 180;
+  const compR = 180;
+  vulnerabilities.forEach((v, idx) => {
+    const angle = (Math.PI * 2 / Math.max(vulnerabilities.length, 1)) * idx;
+    graphCurrentNodes.push({
+      id: v.id, nodeType: 'vulnerability', level: v.level, title: v.name, subTitle: v.cve,
+      x: cx - 200 + Math.cos(angle) * vulnR * 0.6, y: cy + Math.sin(angle) * vulnR
+    });
+  });
+  compliances.forEach((c, idx) => {
+    const angle = (Math.PI * 2 / Math.max(compliances.length, 1)) * idx;
+    graphCurrentNodes.push({
+      id: c.id, nodeType: 'compliance', status: c.status, title: c.item, subTitle: `${c.file} · ${c.status === 'pass' ? '通过' : '未通过'}`,
+      x: cx + 220 + Math.cos(angle) * compR * 0.6, y: cy + Math.sin(angle) * compR
+    });
+  });
+  graphCurrentEdges = [];
+  vulnerabilities.forEach(v => graphCurrentEdges.push({ from: asset.id, to: v.id, type: 'normal' }));
+  compliances.forEach(c => graphCurrentEdges.push({ from: asset.id, to: c.id, type: 'normal' }));
+  (asset.links || []).forEach(l => graphCurrentEdges.push({ from: l.vulnerabilityId, to: l.complianceId, type: 'cross' }));
+  graphSnapshotEquilibrium();
+  renderGraphTopList(getGraphTopAssets());
+  renderGraphStats([asset]);
+  renderGraphCanvas();
+  document.getElementById('graphBreadcrumb').textContent = `全部资产 > ${asset.name}(${asset.ip})`;
+  document.getElementById('graphBackBtn')?.classList.remove('hidden');
+  renderGraphUnifiedDetail(asset, { id: asset.id, title: asset.name });
+}
+
+function applyRiskLevelFilter(vulns) {
+  if (!graphCurrentFilter.riskLevel) return vulns;
+  return vulns.filter(v => v.level === graphCurrentFilter.riskLevel);
+}
+
+function applyGraphFilters(assets) {
+  const f = {
+    assetIp: (graphCurrentFilter.assetIp || '').trim().toLowerCase(),
+    assetName: (graphCurrentFilter.assetName || '').trim().toLowerCase(),
+    vulnerabilityName: (graphCurrentFilter.vulnerabilityName || '').trim().toLowerCase(),
+    complianceFile: (graphCurrentFilter.complianceFile || '').trim().toLowerCase(),
+    complianceItem: (graphCurrentFilter.complianceItem || '').trim().toLowerCase()
+  };
+  const hasKeyword = Object.values(f).some(Boolean);
+  if (!hasKeyword && !graphCurrentFilter.riskLevel) return assets;
+  return assets.filter(a => {
+    if (f.assetIp && !(a.ip || '').toLowerCase().includes(f.assetIp)) return false;
+    if (f.assetName && !(a.name || '').toLowerCase().includes(f.assetName)) return false;
+    if (f.vulnerabilityName) {
+      const hit = applyRiskLevelFilter(a.vulnerabilities || []).some(v => (v.name || '').toLowerCase().includes(f.vulnerabilityName));
+      if (!hit) return false;
+    }
+    if (f.complianceFile) {
+      const hit = (a.compliances || []).some(c => (c.file || '').toLowerCase().includes(f.complianceFile));
+      if (!hit) return false;
+    }
+    if (f.complianceItem) {
+      const hit = (a.compliances || []).some(c => (c.item || '').toLowerCase().includes(f.complianceItem));
+      if (!hit) return false;
+    }
+    if (!hasKeyword && graphCurrentFilter.riskLevel) {
+      return applyRiskLevelFilter(a.vulnerabilities || []).length > 0;
+    }
+    return true;
+  });
+}
+
+function onGraphNodeClick(node) {
+  graphActiveNodeId = node.id;
+  const asset = getGraphAssetByNode(node);
+  if (!asset) return;
+  if (node.nodeType === 'asset') {
+    openGraphDrilldown(asset);
+    return;
+  }
+  renderGraphCanvas();
+  renderGraphUnifiedDetail(asset, node);
+  if (node.nodeType === 'vulnerability' || node.nodeType === 'compliance') {
+    showGraphNodeActions(node);
+  } else {
+    hideGraphNodeActions();
+  }
+}
+
+function hideGraphNodeActions() {
+  document.querySelectorAll('.graph-node-actions').forEach(el => el.remove());
+}
+
+function showGraphNodeActions(node) {
+  hideGraphNodeActions();
+  const canvas = document.getElementById('graphCanvas');
+  const viewport = canvas?.querySelector('.graph-viewport');
+  if (!canvas || !viewport || typeof node.x !== 'number' || typeof node.y !== 'number') return;
+  const bubble = document.createElement('div');
+  bubble.className = 'graph-node-actions';
+  bubble.style.left = `${node.x}px`;
+  bubble.style.top = `${node.y}px`;
+  bubble.innerHTML = `
+    <button class="btn btn-secondary btn-sm" data-action="detail">查看详情</button>
+    <button class="btn btn-primary btn-sm" data-action="search">以该节点搜索</button>
+  `;
+  bubble.addEventListener('click', e => e.stopPropagation());
+  bubble.querySelector('[data-action="detail"]').addEventListener('click', () => openGraphNodeDetailModal(node));
+  bubble.querySelector('[data-action="search"]').addEventListener('click', () => openGraphNodeSearchWindow(node));
+  viewport.appendChild(bubble);
+}
+
+function bindGraphEvents() {
+  document.getElementById('graphBackBtn')?.addEventListener('click', resetGraphToInitialState);
+  document.getElementById('graphDetailBackToTop10')?.addEventListener('click', resetGraphToInitialState);
+  document.getElementById('graphSearchBtn')?.addEventListener('click', () => {
+    const next = { ...GRAPH_DEFAULT_FILTER };
+    Object.entries(GRAPH_FIELD_INPUT_MAP).forEach(([field, inputId]) => {
+      next[field] = document.getElementById(inputId)?.value || '';
+    });
+    next.riskLevel = document.getElementById('graphRiskFilter')?.value || '';
+    graphCurrentFilter = next;
+    if (graphViewMode === 'drilldown' && graphSelectedAssetId) {
+      const asset = graphAssets.find(a => a.id === graphSelectedAssetId);
+      if (asset) openGraphDrilldown(asset);
+      return;
+    }
+    renderGraphOverview();
+  });
+  document.getElementById('graphResetBtn')?.addEventListener('click', () => {
+    resetGraphToInitialState();
+  });
+}
+
+function initGraphAnalysis() {
+  if (!document.getElementById('graphAnalysis')) return;
+  bindGraphEvents();
+  renderGraphOverview();
+  applyGraphQueryParams();
 }
 
 // ============ 初始化 ============
@@ -1809,4 +2568,4 @@ initItemsSearchOptions();
 renderCheckItems();
 renderTasks();
 setupTaskScopeSwitch();
-initOpsMetrics();
+initGraphAnalysis();

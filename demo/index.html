@@ -25,7 +25,12 @@
           <div class="nav-group-title" data-group="inspection">合规检查</div>
           <div class="nav-group-items">
             <a class="nav-item" href="#" data-tab="tasks">合规检查</a>
-            <a class="nav-item" href="#" data-tab="opsMetrics">运营指标</a>
+          </div>
+        </div>
+        <div class="nav-group">
+          <div class="nav-group-title" data-group="graph">图谱分析</div>
+          <div class="nav-group-items">
+            <a class="nav-item" href="#" data-tab="graphAnalysis">图谱分析</a>
           </div>
         </div>
       </nav>
@@ -278,61 +283,69 @@
         </div>
       </section>
 
-      <!-- 4. 运营指标 -->
-      <section id="opsMetrics" class="panel">
+      <!-- 4. 图谱分析 -->
+      <section id="graphAnalysis" class="panel">
         <div class="panel-header">
-          <h2>运营指标管理</h2>
+          <h2>图谱分析</h2>
           <div class="panel-actions">
-            <button class="btn btn-primary btn-sm" id="opsSaveBtn">保存当天数据</button>
+            <button class="btn btn-secondary hidden" id="graphBackBtn">返回上一级</button>
+            <span id="graphBreadcrumb" class="graph-breadcrumb">全部资产</span>
           </div>
         </div>
-        <div class="ops-tabs">
-          <button class="ops-tab" data-ops-tab="security">安全运营指标</button>
-          <button class="ops-tab active" data-ops-tab="local">本地运营指标</button>
-          <button class="ops-tab" data-ops-tab="network">网络运营指标</button>
+        <div class="graph-controls">
+          <div class="search-field">
+            <label>资产IP</label>
+            <input type="text" id="graphSearchAssetIp" class="search-input" placeholder="如 10.2.11.5">
+          </div>
+          <div class="search-field">
+            <label>资产业务系统名称</label>
+            <input type="text" id="graphSearchAssetName" class="search-input" placeholder="如 核心交易">
+          </div>
+          <div class="search-field">
+            <label>漏洞名称</label>
+            <input type="text" id="graphSearchVulnName" class="search-input" placeholder="如 Log4j">
+          </div>
+          <div class="search-field">
+            <label>合规文件</label>
+            <input type="text" id="graphSearchComplianceFile" class="search-input" placeholder="如 等保2.0">
+          </div>
+          <div class="search-field">
+            <label>检查项</label>
+            <input type="text" id="graphSearchComplianceItem" class="search-input" placeholder="如 访问控制">
+          </div>
+          <div class="search-field">
+            <label>漏洞等级</label>
+            <select id="graphRiskFilter" class="search-input">
+              <option value="">全部</option>
+              <option value="high">高危漏洞</option>
+              <option value="medium">中危漏洞</option>
+              <option value="low">低危漏洞</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="graphSearchBtn">查询</button>
+          <button class="btn btn-secondary" id="graphResetBtn">重置</button>
         </div>
-
-        <div class="ops-subview" id="opsSecurityView">
-          <p class="ops-placeholder">安全运营指标（示意区）：可保留现有模块逻辑。</p>
-        </div>
-
-        <div class="ops-subview" id="opsLocalView">
-          <div class="ops-toolbar">
-            <div class="search-field">
-              <label>日期</label>
-              <input type="date" id="opsDate" class="search-input">
+        <div class="graph-layout">
+          <aside class="graph-left-panel">
+            <div id="graphTopPanel">
+              <h4>Top5 风险资产</h4>
+              <ul id="graphTop10List" class="graph-top-list"></ul>
             </div>
-            <div class="search-field">
-              <label>指标名称</label>
-              <input type="text" id="opsKeyword" class="search-input" placeholder="请输入指标名称">
+            <div id="graphDetailPanel" class="hidden">
+              <div class="graph-left-panel-title">
+                <h4>节点详情</h4>
+                <button class="btn btn-secondary btn-sm" id="graphDetailBackToTop10">返回Top5</button>
+              </div>
+              <div id="graphNodeDetail" class="graph-node-detail"></div>
             </div>
-            <button class="btn btn-primary" id="opsSearchBtn">查询</button>
-            <button class="btn btn-secondary" id="opsAddMetricBtn">新增指标</button>
+          </aside>
+          <div class="graph-canvas-wrap">
+            <div id="graphCanvas" class="graph-canvas"></div>
           </div>
-          <div class="ops-content-card table-wrapper">
-            <table class="data-table ops-table">
-              <thead>
-                <tr>
-                  <th>指标名称</th>
-                  <th>分数</th>
-                  <th>权重(%)</th>
-                  <th>加权得分</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="opsTableBody"></tbody>
-            </table>
-          </div>
-          <div class="ops-summary">
-            <span id="opsModifiedHint" class="ops-modified-hint ops-source-default">数据来源：默认前一天</span>
-            <span class="ops-total">当日运营总分：<strong id="opsTotalScore">0.00</strong></span>
-          </div>
-        </div>
-
-        <div class="ops-subview" id="opsNetworkView">
-          <p class="ops-placeholder">网络运营指标（示意区）：可保留现有模块逻辑。</p>
+          <aside class="graph-right-panel hidden"></aside>
         </div>
       </section>
+
     </main>
   </div>
 
@@ -574,6 +587,17 @@
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body" id="itemDetailContent"></div>
+    </div>
+  </div>
+
+  <!-- 模态框：图谱节点详情 -->
+  <div class="modal" id="graphNodeDetailModal">
+    <div class="modal-content modal-lg">
+      <div class="modal-header">
+        <h3 id="graphNodeDetailModalTitle">节点详情</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="graphNodeDetailModalBody"></div>
     </div>
   </div>
 
